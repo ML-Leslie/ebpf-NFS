@@ -1,3 +1,7 @@
+> - Leslie：在`git clone https://github.com/libbpf/libbpf-bootstrap.git`项目基础上叫 AI 写了个 NFS 服务器，主要代码在src目录下，其他有一些是教学案例我没有删（不知道哪些可以删）
+
+---
+
 # eBPF 增强的 NFS 服务器
 
 本项目实现了一个基于 eBPF 技术的高性能 NFS（网络文件系统）服务器，能够在内核空间直接处理简单的 NFS 请求，显著提升服务性能。
@@ -94,6 +98,7 @@ cd src
 make nfs_server
 ```
 
+
 ### 运行
 
 ```bash
@@ -118,6 +123,7 @@ sudo tc filter del dev ens33 ingress
 ```
 ### 测试
 
+> - 这几个我没试过
 ```bash
 # 运行测试脚本
 sudo ./test_nfs_server.sh
@@ -128,7 +134,7 @@ sudo ./test_nfs_server.sh
 # 启动服务器
 ./test_nfs_server.sh start
 ```
-
+> - Leslie：我只试过另外两个`py`文件测试，在另外一个终端运行`python3 test_nfs_client.py`或者`python3 test_nfs_extended.py`
 ## 配置选项
 
 ### 内核配置参数

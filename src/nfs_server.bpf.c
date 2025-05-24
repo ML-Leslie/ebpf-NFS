@@ -354,6 +354,14 @@ int nfs_server_tc(struct __sk_buff *skb)
     /* Handle specific NFS procedures in kernel if enabled */
     if (enable_kernel_processing) {
         switch (rpc.procedure) {
+            case NFSPROC3_NULL:
+                /* NULL operation can be handled immediately */
+                nfs_event->result = NFS_OP_SUCCESS;
+                nfs_event->forwarded_to_user = 0;
+                nfs_event->from_cache = 0;
+                handled_in_kernel = 1;
+                update_nfs_stats(1, 1); /* Kernel processed */
+                break;
             case NFSPROC3_GETATTR:
                 handled_in_kernel = handle_nfs_getattr(req_event, nfs_event);
                 break;

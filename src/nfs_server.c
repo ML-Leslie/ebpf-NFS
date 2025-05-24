@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -216,6 +218,35 @@ static int cache_file_in_kernel(struct nfs_server_bpf *skel, const char *filenam
     return 0;
 }
 
+/* Handle NFS NULL request (ping operation) */
+static void handle_nfs_null(int client_sock, struct sockaddr_in *client_addr, uint32_t xid)
+{
+    char response[64];
+    char *p = response;
+    
+    /* Encode RPC reply header for NULL operation */
+    xdr_encode_u32(&p, xid);                    /* XID */
+    xdr_encode_u32(&p, 1);                      /* REPLY */
+    xdr_encode_u32(&p, 0);                      /* MSG_ACCEPTED */
+    xdr_encode_u32(&p, 0);                      /* AUTH_NULL */
+    xdr_encode_u32(&p, 0);                      /* Auth length */
+    xdr_encode_u32(&p, 0);                      /* ACCEPT_STAT = SUCCESS */
+    
+    /* NULL operation has no data, just success status */
+    xdr_encode_u32(&p, 0);                      /* NFS3_OK */
+    
+    /* Send response */
+    sendto(client_sock, response, p - response, 0,
+           (struct sockaddr *)client_addr, sizeof(*client_addr));
+    
+    stats.user_processed++;
+    
+    if (env.verbose) {
+        printf("NULL operation processed for client %s:%u\n",
+               inet_ntoa(client_addr->sin_addr), ntohs(client_addr->sin_port));
+    }
+}
+
 /* Handle NFS GETATTR request */
 static void handle_nfs_getattr(int client_sock, struct sockaddr_in *client_addr,
                               char *request, int req_len, uint32_t xid)
@@ -345,6 +376,9 @@ static void process_nfs_request(int client_sock, struct sockaddr_in *client_addr
     stats.total_requests++;
     
     switch (proc) {
+        case NFSPROC3_NULL:
+            handle_nfs_null(client_sock, client_addr, xid);
+            break;
         case NFSPROC3_GETATTR:
             handle_nfs_getattr(client_sock, client_addr, buffer, len, xid);
             break;
@@ -361,10 +395,8 @@ static void process_nfs_request(int client_sock, struct sockaddr_in *client_addr
 /* Event handler for eBPF events */
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    const struct nfs_request *req = data;
-    const struct nfs_event *event = data;
-    
     if (data_sz == sizeof(struct nfs_request)) {
+        const struct nfs_request *req = data;
         if (env.verbose) {
             printf("NFS Request: client=%s:%u xid=%u proc=%u kernel=%d file='%s'\n",
                    inet_ntoa((struct in_addr){req->client_addr}), 
@@ -372,6 +404,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
                    req->processed_in_kernel, req->filename);
         }
     } else if (data_sz == sizeof(struct nfs_event)) {
+        const struct nfs_event *event = data;
         if (env.verbose) {
             printf("NFS Event: client=%s:%u xid=%u proc=%u result=%u forward=%d cache=%d file='%s'\n",
                    inet_ntoa((struct in_addr){event->client_addr}),
