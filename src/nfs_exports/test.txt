@@ -1,0 +1,2 @@
+Hello from eBPF-enhanced NFS server!
+This file is cached in kernel space for fast access.
